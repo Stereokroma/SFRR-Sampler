@@ -85,7 +85,7 @@ public:
         IColor bar = kLoadedColor; bar.A = 230;
         g.FillRect(bar, r.GetFromBottom(kLoadedBarH));
         if (mKeyLabels[note][0] != '\0') {
-          IText lbl(8.5f, IColor(255, 225, 225, 225), kRobinMonoFont);
+          IText lbl(8.5f, IColor(255, 255, 249, 235), kRobinMonoFont);
           lbl.mAngle  = -90.f;
           lbl.mAlign  = EAlign::Center;
           lbl.mVAlign = EVAlign::Bottom;
@@ -298,7 +298,7 @@ private:
     const bool loaded = count > 0;
     IColor bg;
     if (loaded)
-      bg = onBlack ? IColor(hovered?210:160, 0,130,100) : IColor(hovered?230:180, 0,145,110);
+      bg = onBlack ? IColor(hovered?210:160, 97,159,75) : IColor(hovered?230:180, 122,183,97);
     else
       bg = onBlack ? IColor(hovered?200:140, 120,120,120) : IColor(hovered?220:160, 90,90,90);
     g.FillRoundRect(bg, r, 2.f);
@@ -360,7 +360,7 @@ const IColor RobinKeyboardControl::kPressedBK  = IColor(255,  55, 120, 205);
 const IColor RobinKeyboardControl::kSelectedWK = IColor(255, 195, 220, 255);  // light blue-white
 const IColor RobinKeyboardControl::kSelectedBK = IColor(255,  45,  65,  95);  // dark blue-black
 const IColor RobinKeyboardControl::kFrame      = IColor(255,  80,  80,  80);
-const IColor RobinKeyboardControl::kLoadedColor= IColor(255,   0, 175, 130);
+const IColor RobinKeyboardControl::kLoadedColor= IColor(255, 122, 183,  97);
 
 END_IGRAPHICS_NAMESPACE
 END_IPLUG_NAMESPACE

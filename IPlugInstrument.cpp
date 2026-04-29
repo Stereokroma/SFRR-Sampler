@@ -37,7 +37,7 @@ public:
     const IColor bg = mMouseIsOver ? IColor(255,75,75,75) : IColor(255,52,52,52);
     g.FillRoundRect(bg, mRECT, 3.f);
     g.DrawRoundRect(IColor(255,70,70,70), mRECT, 3.f, nullptr, 1.f);
-    IText t(12.f, IColor(255,210,210,210));
+    IText t(12.f, IColor(255, 255, 249, 235));
     t.mAlign  = EAlign::Center;
     t.mVAlign = EVAlign::Middle;
     g.DrawText(t, "Clear All", mRECT);
@@ -73,7 +73,7 @@ IPlugInstrument::IPlugInstrument(const InstanceInfo& info)
 {
   GetParam(kParamMode)->InitEnum("Mode", 0, {"Cycle", "Random"});
   GetParam(kParamVelMode)->InitEnum("Velocity", 0, {"Vel On", "Vel Off"});
-  GetParam(kParamSustain)->InitEnum("Sustain", 0, {"Sus Off", "Sus On"});
+  GetParam(kParamSustain)->InitEnum("Sustain", 0, {"Sus On", "Sus Off"});
 
 #if IPLUG_EDITOR
   mMakeGraphicsFunc = [&]() {
@@ -91,6 +91,13 @@ IPlugInstrument::IPlugInstrument(const InstanceInfo& info)
       "/System/Library/Fonts/Supplemental/Courier New.ttf"
 #endif
     );
+    pGraphics->LoadFont("CourierNew-Bold",
+#ifdef OS_WIN
+      "C:\\Windows\\Fonts\\courbd.ttf"
+#else
+      "/System/Library/Fonts/Supplemental/Courier New Bold.ttf"
+#endif
+    );
 
     // Frame is drawn first (background layer)
     pGraphics->AttachControl(
@@ -104,55 +111,57 @@ IPlugInstrument::IPlugInstrument(const InstanceInfo& info)
     IVStyle tabStyle = DEFAULT_STYLE
       .WithColor(kBG,  IColor(255,  28,  28,  28))
       .WithColor(kFG,  IColor(255,  52,  52,  52))
-      .WithColor(kPR,  IColor(255,   0, 175, 130))
+      .WithColor(kPR,  IColor(255, 122, 183,  97))
       .WithColor(kFR,  IColor(255,  65,  65,  65))
       .WithColor(kHL,  IColor(35,  255, 255, 255))
       .WithDrawShadows(false)
-      .WithValueText(IText(13.f, IColor(255, 220, 220, 220)));
+      .WithValueText(IText(13.f, IColor(255, 255, 249, 235)));
 
-    // Header controls
-    const IRECT clearR = header.GetFromRight(86.f).GetCentredInside(86.f, 28.f);
+    // Header controls — Clear All with 10px spacer from right edge
+    const IRECT clearZone = header.GetFromRight(96.f).GetReducedFromRight(10.f);
+    const IRECT clearR = clearZone.GetCentredInside(86.f, 28.f);
     pGraphics->AttachControl(new RobinClearButton(clearR, tabStyle));
 
-    const IRECT midZone = header.GetReducedFromRight(94.f).GetReducedFromLeft(340.f);
-    const IRECT totalR  = midZone.GetCentredInside(491.f, 32.f);
+    const IRECT midZone = header.GetReducedFromRight(94.f).GetReducedFromLeft(355.f);
+    const IRECT totalR  = midZone.GetCentredInside(466.f, 32.f);
     pGraphics->AttachControl(new IVTabSwitchControl(
-      IRECT(totalR.L, totalR.T, totalR.L+165.f, totalR.B),
+      IRECT(totalR.L, totalR.T, totalR.L+140.f, totalR.B),
       kParamMode, {"Cycle","Random"}, "", tabStyle, EVShape::Rectangle));
     pGraphics->AttachControl(new IVTabSwitchControl(
-      IRECT(totalR.L+173.f, totalR.T, totalR.L+323.f, totalR.B),
+      IRECT(totalR.L+148.f, totalR.T, totalR.L+298.f, totalR.B),
       kParamVelMode, {"Vel On","Vel Off"}, "", tabStyle, EVShape::Rectangle));
     pGraphics->AttachControl(new IVTabSwitchControl(
-      IRECT(totalR.L+331.f, totalR.T, totalR.R, totalR.B),
-      kParamSustain, {"Sus Off","Sus On"}, "", tabStyle, EVShape::Rectangle));
+      IRECT(totalR.L+306.f, totalR.T, totalR.R, totalR.B),
+      kParamSustain, {"Sus On","Sus Off"}, "", tabStyle, EVShape::Rectangle));
 
-    IText titleText(22.f, IColor(255, 190, 190, 190));
+    // Stereokroma logo icon — 28×28 at the far left of the header, scaled to fit
+    struct LogoControl : public IControl {
+      IBitmap mBmp;
+      LogoControl(const IRECT& b, const IBitmap& bmp) : IControl(b, kNoParameter), mBmp(bmp) {}
+      void Draw(IGraphics& g) override { g.DrawFittedBitmap(mBmp, mRECT); }
+      bool IsHit(float, float) const override { return false; }
+    };
+    IBitmap logoBmp = pGraphics->LoadBitmap(STEREOKROMA_LOGO_FN);
+    pGraphics->AttachControl(new LogoControl(IRECT(b.L + 12.f, b.T + 12.f, b.L + 52.f, b.T + 52.f), logoBmp));
+
+    IText titleText(22.f, IColor(255, 255, 249, 235));
     titleText.mAlign  = EAlign::Near;
     titleText.mVAlign = EVAlign::Middle;
     pGraphics->AttachControl(
-      new ITextControl(header.GetFromLeft(340.f).GetPadded(-14.f,0.f,0.f,0.f),
+      new ITextControl(header.GetReducedFromLeft(58.f).GetFromLeft(297.f).GetPadded(-4.f,0.f,0.f,0.f),
                        "Simple Fucking Round Robin Sampler", titleText));
 
     // Selected-key panel (between header and keyboard)
     const float panelH = 120.f;
     const IRECT panelR = body.GetFromTop(panelH);
     const IRECT keyArea = body.GetReducedFromTop(panelH);
-    const IRECT hintR = keyArea.GetFromBottom(16.f);
-    const IRECT keysR = keyArea.GetReducedFromBottom(16.f);
 
     auto* panel = new RobinPanelControl(panelR);
     pGraphics->AttachControl(panel, kCtrlTagPanel);
 
-    auto* keyboard = new RobinKeyboardControl(keysR);
+    auto* keyboard = new RobinKeyboardControl(keyArea);
     keyboard->SetPanel(panel);
     pGraphics->AttachControl(keyboard, kCtrlTagKeyboard);
-
-    IText hintText(10.f, IColor(255, 90, 90, 90));
-    hintText.mAlign  = EAlign::Center;
-    hintText.mVAlign = EVAlign::Middle;
-    pGraphics->AttachControl(new ITextControl(hintR,
-      "Click any key to select and play it  |  click + to load samples",
-      hintText));
 
     // Corner resizer on top of everything
     pGraphics->AttachCornerResizer(EUIResizerMode::Scale, false);
@@ -187,7 +196,7 @@ void IPlugInstrument::OnParamChange(int paramIdx)
   switch (paramIdx) {
     case kParamMode:    mDSP.SetRandomMode(GetParam(kParamMode)->Int() == 1);           break;
     case kParamVelMode: mDSP.SetVelocitySensitive(GetParam(kParamVelMode)->Int() == 0); break;
-    case kParamSustain: mDSP.SetSustainMode(GetParam(kParamSustain)->Int() == 1);       break;
+    case kParamSustain: mDSP.SetSustainMode(GetParam(kParamSustain)->Int() == 0);       break;
     default: break;
   }
 }

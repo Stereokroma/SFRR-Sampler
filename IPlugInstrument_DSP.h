@@ -85,8 +85,10 @@ struct SamplerVoice {
 class RobinSamplerDSP
 {
 public:
-  static constexpr int   kMaxVoices   = 32;
-  static constexpr float kReleaseDelta = 1.f / (44100.f * 0.05f);
+  static constexpr int   kMaxVoices   = 64;
+  // 500ms release: short percussion samples finish naturally before this expires;
+  // only very long held notes fade over 500ms on note-off.
+  static constexpr float kReleaseDelta = 1.f / (44100.f * 0.5f);
 
   RobinSamplerDSP() = default;
 
@@ -350,7 +352,17 @@ private:
     for (auto& v : mVoices)
       if (v.releasing && (!q || v.releaseGain < q->releaseGain)) q = &v;
     if (q) return q;
-    return &mVoices[0];
+
+    // Last resort: steal the voice furthest through its sample (least audible)
+    SamplerVoice* best    = nullptr;
+    float          maxProg = -1.f;
+    for (auto& v : mVoices) {
+      if (!v.pSample) continue;
+      const int   tot  = v.pSample->numFrames();
+      const float prog = (tot > 0) ? (float)(v.playPos / (double)tot) : 1.f;
+      if (prog > maxProg) { maxProg = prog; best = &v; }
+    }
+    return best ? best : &mVoices[0];
   }
 
   static bool IsAudioFile(const std::string& p)

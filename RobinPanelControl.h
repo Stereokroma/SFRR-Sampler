@@ -25,7 +25,8 @@ struct RobinLoadMsg   { int note; char path[1024]; };
 struct RobinStateMsg  { int note; bool hasSamples; char label[64]; int sampleCount; };
 struct RobinKeyParamMsg { int note; float gain; float pitch; float lead; float pan; };
 
-static constexpr const char* kRobinMonoFont = "CourierNew";
+static constexpr const char* kRobinMonoFont     = "CourierNew";
+static constexpr const char* kRobinMonoBoldFont = "CourierNew-Bold";
 static constexpr float kRobinPI = 3.14159265f;
 
 // ---------------------------------------------------------------------------
@@ -101,7 +102,7 @@ public:
     const IRECT infoR(mRECT.L, mRECT.T, sepX, mRECT.B);
 
     if (!has) {
-      IText t(12.f, IColor(255, 95, 95, 95), kRobinMonoFont);
+      IText t(12.f, IColor(255, 207, 204, 207), kRobinMonoFont);
       t.mAlign  = EAlign::Center;
       t.mVAlign = EVAlign::Middle;
       g.DrawText(t, "Click a key to edit", infoR);
@@ -112,11 +113,11 @@ public:
       snprintf(noteName, sizeof(noteName), "%s%d",
                kNoteNames[mSelectedKey % 12], mSelectedKey / 12 - 1);
 
-      // Large note name
-      IText bigT(28.f, IColor(255, 210, 210, 210), kRobinMonoFont);
+      // Large note name — bold and larger
+      IText bigT(34.f, IColor(255, 255, 249, 235), kRobinMonoBoldFont);
       bigT.mAlign  = EAlign::Near;
       bigT.mVAlign = EVAlign::Middle;
-      g.DrawText(bigT, noteName, IRECT(infoR.L+12.f, infoR.T, infoR.L+90.f, infoR.MH()));
+      g.DrawText(bigT, noteName, IRECT(infoR.L+12.f, infoR.T, infoR.L+100.f, infoR.MH()));
 
       // Sample count badge
       char cntBuf[24];
@@ -125,7 +126,7 @@ public:
       else
         snprintf(cntBuf, sizeof(cntBuf), "No Samples");
       IColor cntCol = mCounts[mSelectedKey] > 0
-        ? IColor(255, 95, 155, 95) : IColor(255, 140, 75, 75);
+        ? IColor(255, 122, 183, 97) : IColor(255, 202, 25, 9);
       IText cntT(14.f, cntCol, kRobinMonoFont);
       cntT.mAlign  = EAlign::Near;
       cntT.mVAlign = EVAlign::Middle;
@@ -133,7 +134,7 @@ public:
 
       // Folder label
       if (mLabels[mSelectedKey][0] != '\0') {
-        IText lblT(11.f, IColor(255, 135, 135, 135), kRobinMonoFont);
+        IText lblT(11.f, IColor(255, 207, 204, 207), kRobinMonoFont);
         lblT.mAlign  = EAlign::Near;
         lblT.mVAlign = EVAlign::Middle;
         g.DrawText(lblT, mLabels[mSelectedKey],
@@ -158,7 +159,7 @@ public:
 
       // Label
       IRECT lblR = GetKnobLabelRect(k);
-      IText lt(11.f, IColor(dimA, 165, 165, 165), kRobinMonoFont);
+      IText lt(11.f, IColor(dimA, 207, 204, 207), kRobinMonoFont);
       lt.mAlign  = EAlign::Center;
       lt.mVAlign = EVAlign::Middle;
       g.DrawText(lt, kKnobs[k].label, lblR);
@@ -166,7 +167,7 @@ public:
       // Value
       char valBuf[16];
       FormatVal(k, storedVal, valBuf, sizeof(valBuf));
-      IText vt(10.f, IColor(active ? 255 : dimA * 180 / 255, 200, 200, 200), kRobinMonoFont);
+      IText vt(10.f, IColor(active ? 255 : dimA * 180 / 255, 255, 249, 235), kRobinMonoFont);
       vt.mAlign  = EAlign::Center;
       vt.mVAlign = EVAlign::Middle;
       g.DrawText(vt, valBuf, GetKnobValueRect(k));
@@ -379,10 +380,10 @@ private:
 };
 
 const IColor RobinPanelControl::kKnobArcColors[kNumKnobs] = {
-  IColor(220, 215,  90,   0),   // Trim  — orange
-  IColor(220,   0, 175, 130),   // Gain  — teal
-  IColor(220, 200, 130,   0),   // Pitch — amber
-  IColor(220,  90, 130, 215),   // Pan   — lavender
+  IColor(220, 202,  25,   9),   // Trim
+  IColor(220, 202,  25,   9),   // Gain
+  IColor(220, 202,  25,   9),   // Pitch
+  IColor(220, 202,  25,   9),   // Pan
 };
 
 END_IGRAPHICS_NAMESPACE
