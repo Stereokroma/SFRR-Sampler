@@ -12,12 +12,18 @@
 #include <random>
 #include <cstring>
 #include <cmath>
-#include <dirent.h>
-#include <sys/stat.h>
 
-#ifdef OS_MAC
-#include <AudioToolbox/ExtendedAudioFile.h>
-#include <CoreFoundation/CoreFoundation.h>
+#ifdef OS_WIN
+  #include <windows.h>
+  #define DR_WAV_IMPLEMENTATION
+  #include "dr_wav.h"
+#else
+  #include <dirent.h>
+  #include <sys/stat.h>
+  #ifdef OS_MAC
+    #include <AudioToolbox/ExtendedAudioFile.h>
+    #include <CoreFoundation/CoreFoundation.h>
+  #endif
 #endif
 
 using namespace iplug;
@@ -358,13 +364,30 @@ private:
 
   static bool IsDirectory(const std::string& p)
   {
+#ifdef OS_WIN
+    DWORD attrs = GetFileAttributesA(p.c_str());
+    return (attrs != INVALID_FILE_ATTRIBUTES) && (attrs & FILE_ATTRIBUTE_DIRECTORY);
+#else
     struct stat st;
     return stat(p.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+#endif
   }
 
   static void CollectAudioFiles(const std::string& pathIn, std::vector<std::string>& out)
   {
     if (IsDirectory(pathIn)) {
+#ifdef OS_WIN
+      WIN32_FIND_DATAA ffd;
+      HANDLE hFind = FindFirstFileA((pathIn + "\\*").c_str(), &ffd);
+      if (hFind == INVALID_HANDLE_VALUE) return;
+      do {
+        std::string name = ffd.cFileName;
+        if (name == "." || name == "..") continue;
+        std::string full = pathIn + "\\" + name;
+        if (IsAudioFile(full)) out.push_back(full);
+      } while (FindNextFileA(hFind, &ffd));
+      FindClose(hFind);
+#else
       DIR* dir = opendir(pathIn.c_str());
       if (!dir) return;
       struct dirent* e;
@@ -375,12 +398,33 @@ private:
         if (IsAudioFile(full)) out.push_back(full);
       }
       closedir(dir);
+#endif
     } else if (IsAudioFile(pathIn)) {
       out.push_back(pathIn);
     }
   }
 
-#ifdef OS_MAC
+#ifdef OS_WIN
+  static bool LoadAudioFile(const std::string& path, SampleData& out)
+  {
+    unsigned int channels, sampleRate;
+    drwav_uint64 totalFrames;
+    float* pData = drwav_open_file_and_read_pcm_frames_f32(
+      path.c_str(), &channels, &sampleRate, &totalFrames, nullptr);
+    if (!pData || totalFrames == 0) { drwav_free(pData, nullptr); return false; }
+
+    out.sampleRate  = sampleRate;
+    out.numChannels = std::min((int)channels, 2);
+    out.frames.resize((size_t)totalFrames * out.numChannels);
+
+    for (drwav_uint64 i = 0; i < totalFrames; i++)
+      for (int ch = 0; ch < out.numChannels; ch++)
+        out.frames[i * out.numChannels + ch] = pData[i * channels + ch];
+
+    drwav_free(pData, nullptr);
+    return true;
+  }
+#elif defined OS_MAC
   static bool LoadAudioFile(const std::string& path, SampleData& out)
   {
     CFStringRef cfStr = CFStringCreateWithCString(nullptr, path.c_str(), kCFStringEncodingUTF8);

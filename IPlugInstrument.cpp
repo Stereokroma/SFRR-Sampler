@@ -85,7 +85,12 @@ IPlugInstrument::IPlugInstrument(const InstanceInfo& info)
     pGraphics->EnableMouseOver(true);
     pGraphics->LoadFont("Roboto-Regular", ROBOTO_FN);
     pGraphics->LoadFont("CourierNew",
-      "/System/Library/Fonts/Supplemental/Courier New.ttf");
+#ifdef OS_WIN
+      "C:\\Windows\\Fonts\\cour.ttf"
+#else
+      "/System/Library/Fonts/Supplemental/Courier New.ttf"
+#endif
+    );
 
     // Frame is drawn first (background layer)
     pGraphics->AttachControl(
