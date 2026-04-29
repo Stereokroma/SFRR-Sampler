@@ -1,0 +1,7 @@
+build-mac/
+*.dSYM/
+xcuserdata/
+*.xcuserstate
+.DS_Store
+*.o
+*.a
