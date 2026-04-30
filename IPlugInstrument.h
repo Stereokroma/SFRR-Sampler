@@ -50,6 +50,8 @@ public:
 private:
   void SendKeyStateToUI(int note);
   void SendKeyParamsToUI(int note);
+  void WriteSettingsFile(const char* filePath) const;
+  void ReadSettingsFile(const char* filePath);
   static std::string FolderBasename(const char* path);
 
   RobinSamplerDSP mDSP;

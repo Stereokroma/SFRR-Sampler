@@ -37,7 +37,7 @@ public:
     const IColor bg = mMouseIsOver ? IColor(255,75,75,75) : IColor(255,52,52,52);
     g.FillRoundRect(bg, mRECT, 3.f);
     g.DrawRoundRect(IColor(255,70,70,70), mRECT, 3.f, nullptr, 1.f);
-    IText t(12.f, IColor(255, 255, 249, 235));
+    IText t(12.f, IColor(255, 255, 249, 235), "Roboto-Regular");
     t.mAlign  = EAlign::Center;
     t.mVAlign = EVAlign::Middle;
     g.DrawText(t, "Clear All", mRECT);
@@ -64,6 +64,45 @@ public:
 private:
   IVStyle    mStyle;
   IPopupMenu mMenu;
+};
+
+// ---------------------------------------------------------------------------
+class RobinPresetButton : public IControl
+{
+public:
+  RobinPresetButton(const IRECT& b, bool isStore)
+  : IControl(b, kNoParameter), mIsStore(isStore) {}
+
+  void Draw(IGraphics& g) override
+  {
+    const IColor bg = mMouseIsOver ? IColor(255,75,75,75) : IColor(255,52,52,52);
+    g.FillRoundRect(bg, mRECT, 3.f);
+    g.DrawRoundRect(IColor(255,70,70,70), mRECT, 3.f, nullptr, 1.f);
+    IText t(12.f, IColor(255, 255, 249, 235), "Roboto-Regular");
+    t.mAlign  = EAlign::Center;
+    t.mVAlign = EVAlign::Middle;
+    g.DrawText(t, mIsStore ? "Store Settings" : "Load Settings", mRECT);
+  }
+
+  void OnMouseDown(float x, float y, const IMouseMod& mod) override
+  {
+    using namespace igraphics;
+    WDL_String fn, dir;
+    EFileAction action = mIsStore ? EFileAction::Save : EFileAction::Open;
+    int tag = mIsStore ? kMsgTagStoreSettings : kMsgTagLoadSettings;
+    GetUI()->PromptForFile(fn, dir, action, "sfrr",
+      [this, tag](const WDL_String& fileName, const WDL_String&) {
+        if (fileName.GetLength() == 0) return;
+        GetDelegate()->SendArbitraryMsgFromUI(tag, kNoTag,
+          fileName.GetLength() + 1, fileName.Get());
+      });
+  }
+
+  void OnMouseOver(float x, float y, const IMouseMod& mod) override { SetDirty(false); }
+  void OnMouseOut() override { SetDirty(false); }
+
+private:
+  bool mIsStore;
 };
 
 // ---------------------------------------------------------------------------
@@ -138,10 +177,7 @@ IPlugInstrument::IPlugInstrument(const InstanceInfo& info)
     struct LogoControl : public IControl {
       ISVG mSVG;
       LogoControl(const IRECT& b, const ISVG& svg) : IControl(b, kNoParameter), mSVG(svg) {}
-      void Draw(IGraphics& g) override {
-        static const IColor kWhite(255, 255, 249, 235);
-        g.DrawSVG(mSVG, mRECT, nullptr, &kWhite, &kWhite);
-      }
+      void Draw(IGraphics& g) override { g.DrawSVG(mSVG, mRECT); }
       bool IsHit(float, float) const override { return false; }
     };
     ISVG logoSVG = pGraphics->LoadSVG(STEREOKROMA_LOGO_FN);
@@ -155,9 +191,11 @@ IPlugInstrument::IPlugInstrument(const InstanceInfo& info)
                        "Simple Fucking Round Robin Sampler", titleText));
 
     // Selected-key panel (between header and keyboard)
-    const float panelH = 120.f;
-    const IRECT panelR = body.GetFromTop(panelH);
-    const IRECT keyArea = body.GetReducedFromTop(panelH);
+    const float panelH  = 120.f;
+    const float presetH = 44.f;
+    const IRECT panelR  = body.GetFromTop(panelH);
+    const IRECT presetR = body.GetFromBottom(presetH);
+    const IRECT keyArea = body.GetReducedFromTop(panelH).GetReducedFromBottom(presetH);
 
     auto* panel = new RobinPanelControl(panelR);
     pGraphics->AttachControl(panel, kCtrlTagPanel);
@@ -165,6 +203,17 @@ IPlugInstrument::IPlugInstrument(const InstanceInfo& info)
     auto* keyboard = new RobinKeyboardControl(keyArea);
     keyboard->SetPanel(panel);
     pGraphics->AttachControl(keyboard, kCtrlTagKeyboard);
+
+    // Preset bar — Store / Load buttons bottom-right, matching Clear All's right margin
+    {
+      const float btnW = 130.f, btnH = 24.f, btnGap = 8.f;
+      const float btnY = presetR.MH() - btnH * 0.5f;
+      const float rEdge = presetR.R - 10.f;
+      pGraphics->AttachControl(new RobinPresetButton(
+        IRECT(rEdge - btnW, btnY, rEdge, btnY + btnH), false));
+      pGraphics->AttachControl(new RobinPresetButton(
+        IRECT(rEdge - btnW*2.f - btnGap, btnY, rEdge - btnW - btnGap, btnY + btnH), true));
+    }
 
     // Corner resizer on top of everything
     pGraphics->AttachCornerResizer(EUIResizerMode::Scale, false);
@@ -244,6 +293,16 @@ bool IPlugInstrument::OnMessage(int msgTag, int ctrlTag, int dataSize, const voi
     return true;
   }
 
+  if (msgTag == kMsgTagStoreSettings && dataSize > 0) {
+    WriteSettingsFile(static_cast<const char*>(pData));
+    return true;
+  }
+
+  if (msgTag == kMsgTagLoadSettings && dataSize > 0) {
+    ReadSettingsFile(static_cast<const char*>(pData));
+    return true;
+  }
+
   if (msgTag == kMsgTagClearAll) {
     std::vector<int> loaded;
     for (int n = 0; n < 128; n++)
@@ -288,6 +347,100 @@ std::string IPlugInstrument::FolderBasename(const char* path)
   size_t pos = p.rfind('/');
   if (pos == std::string::npos) pos = p.rfind('\\');
   return (pos == std::string::npos) ? p : p.substr(pos+1);
+}
+
+void IPlugInstrument::WriteSettingsFile(const char* filePath) const
+{
+  FILE* f = fopen(filePath, "w");
+  if (!f) return;
+  fprintf(f, "SFRR_PRESET_V1\n");
+  fprintf(f, "mode=%d\n",    GetParam(kParamMode)->Int());
+  fprintf(f, "velmode=%d\n", GetParam(kParamVelMode)->Int());
+  fprintf(f, "sustain=%d\n", GetParam(kParamSustain)->Int());
+  for (int n = 0; n < 128; n++) {
+    if (!mDSP.HasSamples(n)) continue;
+    float gain=1.f, pitch=0.f, lead=0.f, pan=0.f;
+    mDSP.GetKeyParams(n, gain, pitch, lead, pan);
+    fprintf(f, "note_%d.path=%s\n",  n, mDSP.GetFolderPath(n).c_str());
+    fprintf(f, "note_%d.gain=%f\n",  n, gain);
+    fprintf(f, "note_%d.pitch=%f\n", n, pitch);
+    fprintf(f, "note_%d.lead=%f\n",  n, lead);
+    fprintf(f, "note_%d.pan=%f\n",   n, pan);
+  }
+  fclose(f);
+}
+
+void IPlugInstrument::ReadSettingsFile(const char* filePath)
+{
+  FILE* f = fopen(filePath, "r");
+  if (!f) return;
+
+  char line[2048];
+  auto stripNewline = [](char* s) {
+    for (char* p = s + strlen(s) - 1; p >= s && (*p=='\n'||*p=='\r'); --p) *p = '\0';
+  };
+
+  if (!fgets(line, sizeof(line), f)) { fclose(f); return; }
+  stripNewline(line);
+  if (strcmp(line, "SFRR_PRESET_V1") != 0) { fclose(f); return; }
+
+  // Track previously loaded notes so we can clear them in the UI
+  bool hadSamples[128] = {};
+  for (int n = 0; n < 128; n++) hadSamples[n] = mDSP.HasSamples(n);
+
+  mDSP.ClearAllKeys();
+  for (int n = 0; n < 128; n++) mKeyLabels[n].clear();
+
+  // Accumulate per-note params (applied after all paths are loaded)
+  float gains[128], pitches[128], leads[128], pans[128];
+  bool  hasParam[128] = {};
+  for (int n = 0; n < 128; n++) { gains[n]=1.f; pitches[n]=0.f; leads[n]=0.f; pans[n]=0.f; }
+
+  int modeVal = GetParam(kParamMode)->Int();
+  int velVal  = GetParam(kParamVelMode)->Int();
+  int susVal  = GetParam(kParamSustain)->Int();
+
+  while (fgets(line, sizeof(line), f)) {
+    stripNewline(line);
+    if      (strncmp(line, "mode=",    5)==0) modeVal = atoi(line+5);
+    else if (strncmp(line, "velmode=", 8)==0) velVal  = atoi(line+8);
+    else if (strncmp(line, "sustain=", 8)==0) susVal  = atoi(line+8);
+    else if (strncmp(line, "note_",    5)==0) {
+      int   note = atoi(line+5);
+      if (note < 0 || note > 127) continue;
+      char* dot  = strchr(line+5, '.');
+      char* eq   = dot ? strchr(dot+1, '=') : nullptr;
+      if (!dot || !eq) continue;
+      size_t     klen = (size_t)(eq - dot - 1);
+      const char* key = dot+1;
+      const char* val = eq+1;
+      if      (klen==4 && !strncmp(key,"path", 4)) {
+        mDSP.LoadSamplesForKey(note, val);
+        mKeyLabels[note] = FolderBasename(val);
+      } else if (klen==4 && !strncmp(key,"gain", 4)) { gains[note]  = (float)atof(val); hasParam[note]=true; }
+      else if   (klen==5 && !strncmp(key,"pitch",5)) { pitches[note]= (float)atof(val); hasParam[note]=true; }
+      else if   (klen==4 && !strncmp(key,"lead", 4)) { leads[note]  = (float)atof(val); hasParam[note]=true; }
+      else if   (klen==3 && !strncmp(key,"pan",  3)) { pans[note]   = (float)atof(val); hasParam[note]=true; }
+    }
+  }
+  fclose(f);
+
+  // Apply per-note params
+  for (int n = 0; n < 128; n++)
+    if (hasParam[n]) mDSP.SetKeyParams(n, gains[n], pitches[n], leads[n], pans[n]);
+
+  // Apply global params and push to UI controls
+  GetParam(kParamMode)->Set(modeVal);    OnParamChange(kParamMode);
+  GetParam(kParamVelMode)->Set(velVal);  OnParamChange(kParamVelMode);
+  GetParam(kParamSustain)->Set(susVal);  OnParamChange(kParamSustain);
+  SendCurrentParamValuesFromDelegate();
+
+  // Sync key state to UI
+  for (int n = 0; n < 128; n++)
+    if (hadSamples[n] || mDSP.HasSamples(n)) {
+      SendKeyStateToUI(n);
+      SendKeyParamsToUI(n);
+    }
 }
 
 bool IPlugInstrument::SerializeState(IByteChunk& chunk) const

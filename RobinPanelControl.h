@@ -19,6 +19,8 @@ enum ERobinMsgTags
   kMsgTagClearAll,
   kMsgTagSetKeyParam,
   kMsgTagKeyParamSync,
+  kMsgTagStoreSettings,
+  kMsgTagLoadSettings,
 };
 
 struct RobinLoadMsg   { int note; char path[1024]; };
