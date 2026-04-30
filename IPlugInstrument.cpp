@@ -134,15 +134,18 @@ IPlugInstrument::IPlugInstrument(const InstanceInfo& info)
       IRECT(totalR.L+306.f, totalR.T, totalR.R, totalR.B),
       kParamSustain, {"Sus On","Sus Off"}, "", tabStyle, EVShape::Rectangle));
 
-    // Stereokroma logo icon — 28×28 at the far left of the header, scaled to fit
+    // Stereokroma logo — SVG scales crisp at any resolution
     struct LogoControl : public IControl {
-      IBitmap mBmp;
-      LogoControl(const IRECT& b, const IBitmap& bmp) : IControl(b, kNoParameter), mBmp(bmp) {}
-      void Draw(IGraphics& g) override { g.DrawFittedBitmap(mBmp, mRECT); }
+      ISVG mSVG;
+      LogoControl(const IRECT& b, const ISVG& svg) : IControl(b, kNoParameter), mSVG(svg) {}
+      void Draw(IGraphics& g) override {
+        static const IColor kWhite(255, 255, 249, 235);
+        g.DrawSVG(mSVG, mRECT, nullptr, &kWhite, &kWhite);
+      }
       bool IsHit(float, float) const override { return false; }
     };
-    IBitmap logoBmp = pGraphics->LoadBitmap(STEREOKROMA_LOGO_FN);
-    pGraphics->AttachControl(new LogoControl(IRECT(b.L + 12.f, b.T + 12.f, b.L + 52.f, b.T + 52.f), logoBmp));
+    ISVG logoSVG = pGraphics->LoadSVG(STEREOKROMA_LOGO_FN);
+    pGraphics->AttachControl(new LogoControl(IRECT(b.L + 12.f, b.T + 12.f, b.L + 52.f, b.T + 52.f), logoSVG));
 
     IText titleText(22.f, IColor(255, 255, 249, 235));
     titleText.mAlign  = EAlign::Near;
