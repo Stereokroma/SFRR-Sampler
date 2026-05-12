@@ -4,7 +4,7 @@
 
 Made by [Stereokroma](https://stereokroma.com).
 
-![SFRR-Sampler](screenshot.png)
+![SFRR-Sampler](screenshot-v130.png)
 
 ---
 
