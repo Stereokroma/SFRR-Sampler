@@ -1,7 +1,7 @@
 #define PLUG_NAME "SFRR-Sampler"
 #define PLUG_MFR "Stereokroma"
-#define PLUG_VERSION_HEX 0x00010200
-#define PLUG_VERSION_STR "1.2.0"
+#define PLUG_VERSION_HEX 0x00010300
+#define PLUG_VERSION_STR "1.3.0"
 #define PLUG_UNIQUE_ID 'RbSp'
 #define PLUG_MFR_ID 'Stkr'
 #define PLUG_URL_STR "https://stereokroma.com"

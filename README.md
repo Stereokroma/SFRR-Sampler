@@ -37,8 +37,10 @@ Restart your DAW after installing.
 - **Per-key editor** — click any key to open its controls:
   - **Trim** — skip the first 0–500 ms of the sample (useful for samples with silence at the start)
   - **Gain** — 0–200%, unity at 100%
-  - **Pitch** — coarse tuning ±12 semitones
+  - **Pitch** — coarse tuning ±24 semitones (two octaves)
   - **Pan** — stereo placement L to R
+  - **Attack** — volume ramp-in time, 0–1000 ms
+  - **Release** — volume fade-out time on note-off, 0–1000 ms
   - Double-click any knob to reset to default
 - **Preset save/load** — Store and Load Settings buttons save your full setup (all sample paths and per-key values) to a `.sfrr` file
 - **DAW state saving** — all loaded samples and settings persist in your DAW project automatically

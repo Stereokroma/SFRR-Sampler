@@ -289,7 +289,7 @@ bool IPlugInstrument::OnMessage(int msgTag, int ctrlTag, int dataSize, const voi
   if (msgTag == kMsgTagSetKeyParam && dataSize == sizeof(RobinKeyParamMsg)) {
     const auto* m = static_cast<const RobinKeyParamMsg*>(pData);
     if (m->note >= 0 && m->note <= 127)
-      mDSP.SetKeyParams(m->note, m->gain, m->pitch, m->lead, m->pan);
+      mDSP.SetKeyParams(m->note, m->gain, m->pitch, m->lead, m->pan, m->attack, m->release);
     return true;
   }
 
@@ -336,7 +336,7 @@ void IPlugInstrument::SendKeyParamsToUI(int note)
   using namespace igraphics;
   RobinKeyParamMsg msg;
   msg.note = note;
-  mDSP.GetKeyParams(note, msg.gain, msg.pitch, msg.lead, msg.pan);
+  mDSP.GetKeyParams(note, msg.gain, msg.pitch, msg.lead, msg.pan, msg.attack, msg.release);
   SendControlMsgFromDelegate(kCtrlTagPanel, kMsgTagKeyParamSync, sizeof(msg), &msg);
 }
 
@@ -359,13 +359,15 @@ void IPlugInstrument::WriteSettingsFile(const char* filePath) const
   fprintf(f, "sustain=%d\n", GetParam(kParamSustain)->Int());
   for (int n = 0; n < 128; n++) {
     if (!mDSP.HasSamples(n)) continue;
-    float gain=1.f, pitch=0.f, lead=0.f, pan=0.f;
-    mDSP.GetKeyParams(n, gain, pitch, lead, pan);
-    fprintf(f, "note_%d.path=%s\n",  n, mDSP.GetFolderPath(n).c_str());
-    fprintf(f, "note_%d.gain=%f\n",  n, gain);
-    fprintf(f, "note_%d.pitch=%f\n", n, pitch);
-    fprintf(f, "note_%d.lead=%f\n",  n, lead);
-    fprintf(f, "note_%d.pan=%f\n",   n, pan);
+    float gain=1.f, pitch=0.f, lead=0.f, pan=0.f, attack=0.f, release=500.f;
+    mDSP.GetKeyParams(n, gain, pitch, lead, pan, attack, release);
+    fprintf(f, "note_%d.path=%s\n",    n, mDSP.GetFolderPath(n).c_str());
+    fprintf(f, "note_%d.gain=%f\n",    n, gain);
+    fprintf(f, "note_%d.pitch=%f\n",   n, pitch);
+    fprintf(f, "note_%d.lead=%f\n",    n, lead);
+    fprintf(f, "note_%d.pan=%f\n",     n, pan);
+    fprintf(f, "note_%d.attack=%f\n",  n, attack);
+    fprintf(f, "note_%d.release=%f\n", n, release);
   }
   fclose(f);
 }
@@ -392,9 +394,12 @@ void IPlugInstrument::ReadSettingsFile(const char* filePath)
   for (int n = 0; n < 128; n++) mKeyLabels[n].clear();
 
   // Accumulate per-note params (applied after all paths are loaded)
-  float gains[128], pitches[128], leads[128], pans[128];
+  float gains[128], pitches[128], leads[128], pans[128], attacks[128], releases[128];
   bool  hasParam[128] = {};
-  for (int n = 0; n < 128; n++) { gains[n]=1.f; pitches[n]=0.f; leads[n]=0.f; pans[n]=0.f; }
+  for (int n = 0; n < 128; n++) {
+    gains[n]=1.f; pitches[n]=0.f; leads[n]=0.f; pans[n]=0.f;
+    attacks[n]=0.f; releases[n]=500.f;
+  }
 
   int modeVal = GetParam(kParamMode)->Int();
   int velVal  = GetParam(kParamVelMode)->Int();
@@ -414,20 +419,22 @@ void IPlugInstrument::ReadSettingsFile(const char* filePath)
       size_t     klen = (size_t)(eq - dot - 1);
       const char* key = dot+1;
       const char* val = eq+1;
-      if      (klen==4 && !strncmp(key,"path", 4)) {
+      if      (klen==4 && !strncmp(key,"path",    4)) {
         mDSP.LoadSamplesForKey(note, val);
         mKeyLabels[note] = FolderBasename(val);
-      } else if (klen==4 && !strncmp(key,"gain", 4)) { gains[note]  = (float)atof(val); hasParam[note]=true; }
-      else if   (klen==5 && !strncmp(key,"pitch",5)) { pitches[note]= (float)atof(val); hasParam[note]=true; }
-      else if   (klen==4 && !strncmp(key,"lead", 4)) { leads[note]  = (float)atof(val); hasParam[note]=true; }
-      else if   (klen==3 && !strncmp(key,"pan",  3)) { pans[note]   = (float)atof(val); hasParam[note]=true; }
+      } else if (klen==4 && !strncmp(key,"gain",   4)) { gains[note]    = (float)atof(val); hasParam[note]=true; }
+      else if   (klen==5 && !strncmp(key,"pitch",  5)) { pitches[note]  = (float)atof(val); hasParam[note]=true; }
+      else if   (klen==4 && !strncmp(key,"lead",   4)) { leads[note]    = (float)atof(val); hasParam[note]=true; }
+      else if   (klen==3 && !strncmp(key,"pan",    3)) { pans[note]     = (float)atof(val); hasParam[note]=true; }
+      else if   (klen==6 && !strncmp(key,"attack", 6)) { attacks[note]  = (float)atof(val); hasParam[note]=true; }
+      else if   (klen==7 && !strncmp(key,"release",7)) { releases[note] = (float)atof(val); hasParam[note]=true; }
     }
   }
   fclose(f);
 
   // Apply per-note params
   for (int n = 0; n < 128; n++)
-    if (hasParam[n]) mDSP.SetKeyParams(n, gains[n], pitches[n], leads[n], pans[n]);
+    if (hasParam[n]) mDSP.SetKeyParams(n, gains[n], pitches[n], leads[n], pans[n], attacks[n], releases[n]);
 
   // Apply global params and push to UI controls
   GetParam(kParamMode)->Set(modeVal);    OnParamChange(kParamMode);
