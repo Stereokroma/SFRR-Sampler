@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>SFRR-Sampler</string>
 	<key>CFBundleGetInfoString</key>
-	<string>IPlugInstrument v1.0.0 Copyright 2025 Stereokroma</string>
+	<string>IPlugInstrument v1.3.0 Copyright 2025 Stereokroma</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.Stereokroma.app.IPlugInstrument.AUv3</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -17,9 +17,9 @@
 	<key>CFBundlePackageType</key>
 	<string>XPC!</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.0</string>
+	<string>1.3.0</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.0</string>
+	<string>1.3.0</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>10.12.0</string>
 	<key>NSExtension</key>
@@ -48,7 +48,7 @@
 					<key>type</key>
 					<string>aumu</string>
 					<key>version</key>
-					<integer>65536</integer>
+					<integer>66304</integer>
 				</dict>
 			</array>
 		</dict>

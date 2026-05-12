@@ -25,7 +25,7 @@ enum ERobinMsgTags
 
 struct RobinLoadMsg   { int note; char path[1024]; };
 struct RobinStateMsg  { int note; bool hasSamples; char label[64]; int sampleCount; };
-struct RobinKeyParamMsg { int note; float gain; float pitch; float lead; float pan; };
+struct RobinKeyParamMsg { int note; float gain; float pitch; float lead; float pan; float attack; float release; };
 
 static constexpr const char* kRobinMonoFont     = "CourierNew";
 static constexpr const char* kRobinMonoBoldFont = "CourierNew-Bold";
@@ -38,7 +38,7 @@ static constexpr float kRobinPI = 3.14159265f;
 class RobinPanelControl : public IControl
 {
 public:
-  static constexpr int   kNumKnobs   = 4;
+  static constexpr int   kNumKnobs   = 6;
   static constexpr float kKnobR      = 30.f;   // outer radius of arc ring
   static constexpr float kBodyR      = 22.f;   // filled knob body radius
   static constexpr float kArcR       = 26.f;   // arc ring center radius
@@ -58,12 +58,14 @@ public:
     int   valIdx;    // index into mVals[n]: 0=gain 1=pitch 2=lead 3=pan
   };
 
-  // Display order: Trim, Gain, Pitch, Pan
+  // Display order: Trim, Gain, Pitch, Pan, Attack, Release
   static constexpr KnobDef kKnobs[kNumKnobs] = {
-    { "Trim",   0.f,  500.f, 0.f,   1.f, "ms",  false, 2 },  // lead
-    { "Gain",   0.f,   2.f,  1.f, 100.f, "%",   false, 0 },
-    { "Pitch", -12.f, 12.f,  0.f,   1.f, " st", true,  1 },
-    { "Pan",   -1.f,  1.f,   0.f, 100.f, "",    true,  3 },
+    { "Trim",    0.f,  500.f,   0.f,   1.f, "ms",  false, 2 },  // lead
+    { "Gain",    0.f,    2.f,   1.f, 100.f, "%",   false, 0 },
+    { "Pitch", -24.f,  24.f,   0.f,   1.f, " st", true,  1 },
+    { "Pan",    -1.f,   1.f,   0.f, 100.f, "",    true,  3 },
+    { "Attack",  0.f, 1000.f,  0.f,   1.f, "ms",  false, 4 },
+    { "Release", 0.f, 1000.f, 500.f,  1.f, "ms",  false, 5 },
   };
 
   static const IColor kKnobArcColors[kNumKnobs];
@@ -248,6 +250,8 @@ public:
         mVals[m->note][1] = m->pitch;
         mVals[m->note][2] = m->lead;
         mVals[m->note][3] = m->pan;
+        mVals[m->note][4] = m->attack;
+        mVals[m->note][5] = m->release;
         if (m->note == mSelectedKey) SetDirty(false);
       }
     }
@@ -360,11 +364,13 @@ private:
   {
     if (note < 0 || note >= 128) return;
     RobinKeyParamMsg m;
-    m.note  = note;
-    m.gain  = mVals[note][0];
-    m.pitch = mVals[note][1];
-    m.lead  = mVals[note][2];
-    m.pan   = mVals[note][3];
+    m.note    = note;
+    m.gain    = mVals[note][0];
+    m.pitch   = mVals[note][1];
+    m.lead    = mVals[note][2];
+    m.pan     = mVals[note][3];
+    m.attack  = mVals[note][4];
+    m.release = mVals[note][5];
     GetDelegate()->SendArbitraryMsgFromUI(kMsgTagSetKeyParam, GetTag(), sizeof(m), &m);
   }
 
@@ -386,6 +392,8 @@ const IColor RobinPanelControl::kKnobArcColors[kNumKnobs] = {
   IColor(220, 202,  25,   9),   // Gain
   IColor(220, 202,  25,   9),   // Pitch
   IColor(220, 202,  25,   9),   // Pan
+  IColor(220, 202,  25,   9),   // Attack
+  IColor(220, 202,  25,   9),   // Release
 };
 
 END_IGRAPHICS_NAMESPACE

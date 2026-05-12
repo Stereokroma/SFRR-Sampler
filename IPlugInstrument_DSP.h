@@ -45,10 +45,12 @@ struct KeyState {
   int rrIndex    = 0;
   int lastPlayed = -1;
 
-  float keyGain  = 1.0f;   // 0–2, unity = 1
-  float keyPitch = 0.0f;   // ±12 semitones
-  float keyLead  = 0.0f;   // 0–1000 ms start offset
-  float keyPan   = 0.0f;   // -1 (L) to +1 (R), 0 = center
+  float keyGain    = 1.0f;   // 0–2, unity = 1
+  float keyPitch   = 0.0f;   // ±24 semitones
+  float keyLead    = 0.0f;   // 0–1000 ms start offset
+  float keyPan     = 0.0f;   // -1 (L) to +1 (R), 0 = center
+  float keyAttack  = 0.0f;   // 0–1000 ms attack time
+  float keyRelease = 500.0f; // 0–1000 ms release time
 
   int NextSampleIndex(bool randomMode) {
     int n = (int)samples.size();
@@ -71,24 +73,27 @@ struct KeyState {
 
 struct SamplerVoice {
   SampleDataPtr pSample;
-  int    note        = -1;
-  double playPos     = 0.0;
-  double rateRatio   = 1.0;
-  float  velocity    = 1.0f;
-  float  keyGain     = 1.0f;
-  float  keyPan      = 0.0f;
-  bool   active      = false;
-  bool   releasing   = false;
-  float  releaseGain = 1.0f;
+  int    note         = -1;
+  double playPos      = 0.0;
+  double rateRatio    = 1.0;
+  float  velocity     = 1.0f;
+  float  keyGain      = 1.0f;
+  float  keyPan       = 0.0f;
+  bool   active       = false;
+  bool   releasing    = false;
+  float  releaseGain  = 1.0f;
+  float  relDelta     = 0.f;   // per-sample release decrement
+  bool   inAttack     = false;
+  float  attackGain   = 1.0f;
+  float  attackDelta  = 0.f;   // per-sample attack increment
 };
 
 class RobinSamplerDSP
 {
 public:
-  static constexpr int   kMaxVoices   = 64;
-  // 500ms release: short percussion samples finish naturally before this expires;
-  // only very long held notes fade over 500ms on note-off.
-  static constexpr float kReleaseDelta = 1.f / (44100.f * 0.5f);
+  static constexpr int   kMaxVoices    = 64;
+  // Used only for the retrigger choke (always a fast 20ms cut).
+  static constexpr float kChokeDelta  = 1.f / (44100.f * 0.02f);
 
   RobinSamplerDSP() = default;
 
@@ -98,8 +103,6 @@ public:
   {
     for (int ch = 0; ch < nOutputs; ch++)
       memset(outputs[ch], 0, nFrames * sizeof(sample));
-
-    const float relDelta = (float)(kReleaseDelta * 44100.0 / mSampleRate);
 
     for (auto& v : mVoices) {
       if (!v.active || !v.pSample) continue;
@@ -114,8 +117,13 @@ public:
       const float panR     = std::sin(panAngle);
 
       for (int i = 0; i < nFrames; i++) {
+        if (v.inAttack) {
+          v.attackGain += v.attackDelta;
+          if (v.attackGain >= 1.f) { v.attackGain = 1.f; v.inAttack = false; }
+        }
+
         if (v.releasing) {
-          v.releaseGain -= relDelta;
+          v.releaseGain -= v.relDelta;
           if (v.releaseGain <= 0.f) { v.active = false; break; }
         }
 
@@ -124,7 +132,7 @@ public:
 
         const double frac      = v.playPos - frame;
         const int    nextFrame = std::min(frame + 1, total - 1);
-        const float  gain      = v.velocity * v.releaseGain * v.keyGain;
+        const float  gain      = v.velocity * v.releaseGain * v.attackGain * v.keyGain;
 
         auto s = [&](int f, int c) -> float {
           return sd.frames[f * nCh + std::min(c, nCh - 1)];
@@ -183,24 +191,32 @@ public:
   void SetVelocitySensitive(bool s) { mVelSensitive = s; }
   void SetSustainMode(bool s)     { mSustainMode  = s; }
 
-  void SetKeyParams(int note, float gain, float pitch, float lead, float pan)
+  void SetKeyParams(int note, float gain, float pitch, float lead, float pan,
+                    float attack, float release)
   {
     if (note < 0 || note > 127) return;
     std::lock_guard<std::mutex> lock(mMutex);
-    mKeys[note].keyGain  = gain;
-    mKeys[note].keyPitch = pitch;
-    mKeys[note].keyLead  = lead;
-    mKeys[note].keyPan   = pan;
+    mKeys[note].keyGain    = gain;
+    mKeys[note].keyPitch   = pitch;
+    mKeys[note].keyLead    = lead;
+    mKeys[note].keyPan     = pan;
+    mKeys[note].keyAttack  = attack;
+    mKeys[note].keyRelease = release;
   }
 
-  void GetKeyParams(int note, float& gain, float& pitch, float& lead, float& pan) const
+  void GetKeyParams(int note, float& gain, float& pitch, float& lead, float& pan,
+                    float& attack, float& release) const
   {
-    if (note < 0 || note > 127) { gain=1.f; pitch=0.f; lead=0.f; pan=0.f; return; }
+    if (note < 0 || note > 127) {
+      gain=1.f; pitch=0.f; lead=0.f; pan=0.f; attack=0.f; release=500.f; return;
+    }
     std::lock_guard<std::mutex> lock(mMutex);
-    gain  = mKeys[note].keyGain;
-    pitch = mKeys[note].keyPitch;
-    lead  = mKeys[note].keyLead;
-    pan   = mKeys[note].keyPan;
+    gain    = mKeys[note].keyGain;
+    pitch   = mKeys[note].keyPitch;
+    lead    = mKeys[note].keyLead;
+    pan     = mKeys[note].keyPan;
+    attack  = mKeys[note].keyAttack;
+    release = mKeys[note].keyRelease;
   }
 
   void ClearAllKeys()
@@ -216,6 +232,8 @@ public:
       mKeys[n].keyPitch   = 0.0f;
       mKeys[n].keyLead    = 0.0f;
       mKeys[n].keyPan     = 0.0f;
+      mKeys[n].keyAttack  = 0.0f;
+      mKeys[n].keyRelease = 500.0f;
     }
   }
 
@@ -250,6 +268,8 @@ public:
       chunk.Put<float>(&mKeys[n].keyPitch);
       chunk.Put<float>(&mKeys[n].keyLead);
       chunk.Put<float>(&mKeys[n].keyPan);
+      chunk.Put<float>(&mKeys[n].keyAttack);
+      chunk.Put<float>(&mKeys[n].keyRelease);
     }
     return true;
   }
@@ -263,17 +283,21 @@ public:
       if (path.GetLength() > 0) LoadSamplesForKey(n, path.Get());
     }
     for (int n = 0; n < 128; n++) {
-      float gain=1.f, pitch=0.f, lead=0.f, pan=0.f;
+      float gain=1.f, pitch=0.f, lead=0.f, pan=0.f, attack=0.f, release=500.f;
       int np;
-      np = chunk.Get<float>(&gain,  startPos); if (np < 0) break; startPos = np;
-      np = chunk.Get<float>(&pitch, startPos); if (np < 0) break; startPos = np;
-      np = chunk.Get<float>(&lead,  startPos); if (np < 0) break; startPos = np;
-      np = chunk.Get<float>(&pan,   startPos); if (np < 0) break; startPos = np;
+      np = chunk.Get<float>(&gain,    startPos); if (np < 0) break; startPos = np;
+      np = chunk.Get<float>(&pitch,   startPos); if (np < 0) break; startPos = np;
+      np = chunk.Get<float>(&lead,    startPos); if (np < 0) break; startPos = np;
+      np = chunk.Get<float>(&pan,     startPos); if (np < 0) break; startPos = np;
+      np = chunk.Get<float>(&attack,  startPos); if (np < 0) break; startPos = np;
+      np = chunk.Get<float>(&release, startPos); if (np < 0) break; startPos = np;
       std::lock_guard<std::mutex> lock(mMutex);
-      mKeys[n].keyGain  = gain;
-      mKeys[n].keyPitch = pitch;
-      mKeys[n].keyLead  = lead;
-      mKeys[n].keyPan   = pan;
+      mKeys[n].keyGain    = gain;
+      mKeys[n].keyPitch   = pitch;
+      mKeys[n].keyLead    = lead;
+      mKeys[n].keyPan     = pan;
+      mKeys[n].keyAttack  = attack;
+      mKeys[n].keyRelease = release;
     }
     return startPos;
   }
@@ -281,7 +305,7 @@ public:
 private:
   void TriggerNote(int note, int velocity)
   {
-    float kGain, kPitch, kLead, kPan;
+    float kGain, kPitch, kLead, kPan, kAttack, kRelease;
     SampleDataPtr sample;
     {
       std::lock_guard<std::mutex> lock(mMutex);
@@ -289,18 +313,24 @@ private:
       if (key.samples.empty()) return;
       int idx = key.NextSampleIndex(mGlobalRandom);
       if (idx < 0) return;
-      sample = key.samples[idx];
-      kGain  = key.keyGain;
-      kPitch = key.keyPitch;
-      kLead  = key.keyLead;
-      kPan   = key.keyPan;
+      sample   = key.samples[idx];
+      kGain    = key.keyGain;
+      kPitch   = key.keyPitch;
+      kLead    = key.keyLead;
+      kPan     = key.keyPan;
+      kAttack  = key.keyAttack;
+      kRelease = key.keyRelease;
     }
 
+    const float chokeDelta = (float)(kChokeDelta * 44100.0 / mSampleRate);
     if (!mSustainMode) {
       for (auto& v : mVoices)
         if (v.active && v.note == note && !v.releasing) {
           v.releasing   = true;
-          v.releaseGain = std::min(v.releaseGain, 0.08f);
+          v.inAttack    = false;
+          v.attackGain  = 1.f;
+          v.releaseGain = 1.f;
+          v.relDelta    = chokeDelta;
         }
     }
 
@@ -317,13 +347,27 @@ private:
     v->active      = true;
     v->releasing   = false;
     v->releaseGain = 1.f;
+    v->relDelta    = (kRelease > 0.f)
+                       ? 1.f / (float)(mSampleRate * kRelease / 1000.f)
+                       : 1.f;
+    if (kAttack > 0.f) {
+      v->inAttack    = true;
+      v->attackGain  = 0.f;
+      v->attackDelta = 1.f / (float)(mSampleRate * kAttack / 1000.f);
+    } else {
+      v->inAttack    = false;
+      v->attackGain  = 1.f;
+      v->attackDelta = 0.f;
+    }
   }
 
   void ReleaseNote(int note)
   {
-    if (mSustainMode) return;  // sustain ON: let samples play to natural end
+    if (mSustainMode) return;
     for (auto& v : mVoices)
-      if (v.active && v.note == note && !v.releasing) v.releasing = true;
+      if (v.active && v.note == note && !v.releasing)
+        v.releasing = true;
+    // relDelta was already set at trigger time, so the per-key release time is applied
   }
 
   SamplerVoice* FindFreeVoice(int note, bool sustainMode)
